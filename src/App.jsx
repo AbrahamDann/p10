@@ -5,14 +5,12 @@ import NewsCard from './components/NewsCard';
 import AlertsCard from './components/AlertsCard';
 import SearchBar from './components/SearchBar';
 import StatusBar from './components/StatusBar';
-
+import { fetchWithRetry } from './utils/asyncPatterns';
+import { cachedFetch } from './utils/asyncPatterns';
+import { fetchDashboardData } from './services/dashboardService'
 // PROBLEM: This basic fetch has no retry, no caching, no error handling
 async function basicFetch(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Network response was not ok');
-  }
-  return response.json();
+  return cachedFetch(url, { timeout: 3000 });
 }
 
 function App() {
@@ -53,44 +51,16 @@ function App() {
   };
 
   // PROBLEM: All requests are sequential, not parallel
-  const fetchAllData = async (cityName) => {
-    // Fetch weather
-    await fetchWeatherData(cityName);
+    const fetchAllData = async (cityName) => {
+    setLoading({ weather: true, forecast: true, news: true, alerts: true });
 
-    // Fetch forecast
-    setLoading(prev => ({ ...prev, forecast: true }));
-    try {
-      const data = await basicFetch(`http://localhost:3001/forecast?city=${cityName}`);
-      setDashboardData(prev => ({ ...prev, forecast: data }));
-    } catch (error) {
-      setErrors(prev => ({ ...prev, forecast: error.message }));
-    } finally {
-      setLoading(prev => ({ ...prev, forecast: false }));
-    }
+    const { data, errors } = await fetchDashboardData(cityName);
 
-    // Fetch news
-    setLoading(prev => ({ ...prev, news: true }));
-    try {
-      const data = await basicFetch(`http://localhost:3001/news?city=${cityName}`);
-      setDashboardData(prev => ({ ...prev, news: data }));
-    } catch (error) {
-      setErrors(prev => ({ ...prev, news: error.message }));
-    } finally {
-      setLoading(prev => ({ ...prev, news: false }));
-    }
-
-    // Fetch alerts
-    setLoading(prev => ({ ...prev, alerts: true }));
-    try {
-      const data = await basicFetch(`http://localhost:3001/alerts?city=${cityName}`);
-      setDashboardData(prev => ({ ...prev, alerts: data }));
-    } catch (error) {
-      setErrors(prev => ({ ...prev, alerts: error.message }));
-    } finally {
-      setLoading(prev => ({ ...prev, alerts: false }));
-    }
+    setDashboardData(prev => ({ ...prev, ...data }));
+    setErrors(errors);
+    setLoading({ weather: false, forecast: false, news: false, alerts: false });
   };
-
+  
   useEffect(() => {
     fetchAllData(city);
   }, [city]);
